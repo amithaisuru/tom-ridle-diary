@@ -358,6 +358,7 @@
   </nav>
   <audio id="background-music" preload="auto" aria-hidden="true"></audio>
   <audio id="diary-sound" src="audio/open-diary-sound.mp3" preload="auto" aria-hidden="true"></audio>
+  <audio id="key-sound" src="audio/key-stroke.mp3" preload="auto" aria-hidden="true"></audio>
 
 <script src="sinhala-legacy.js"></script>
 <script>
@@ -392,6 +393,15 @@
   const music = document.getElementById("background-music");
   const diarySound = document.getElementById("diary-sound");
   diarySound.volume = 0.5;
+  const keySound = document.getElementById("key-sound");
+  keySound.volume = 0.5;
+  function playKeySound() {
+    if (music.muted) return;
+    // Clone so rapid keystrokes overlap instead of restarting one another.
+    const s = keySound.cloneNode();
+    s.volume = keySound.volume;
+    s.play().catch(() => {});
+  }
   const musicToggle = document.getElementById("music-toggle");
   const musicTracks = [
     "audio/geoffharvey-the-magic-tree-150606.mp3",
@@ -898,6 +908,7 @@
     if (v.includes("\n")) { v = v.replace(/\n/g, ""); ta.value = v; wantsSubmit = true; }
     // Let the current reply finish before accepting the next question.
     if (busy()) { ta.value = typed; return; }
+    if (v !== typed) playKeySound();
     const now = performance.now();
     if (phase !== "typing" && v.length) {
       // Writing again clears the completed reply.

@@ -4,7 +4,7 @@ import os
 from google import genai
 from google.genai import types
 
-TOM_RIDDLE_PROMPT = """You are Tom Riddle, the Heir of Slytherin. You are brilliant, cold, and view others as entirely inferior. Answer all questions with extreme brevity. Be dismissive, cunning, and arrogant. Do not offer unprompted help, polite greetings, or moral warnings."""
+TOM_RIDDLE_PROMPT = """You are Tom Riddle, the Heir of Slytherin. You are brilliant, cold, and view others as entirely inferior. Answer all questions with extreme brevity. Do not offer unprompted help, polite greetings, or moral warnings."""
 
 async def generate_chat_reponse(prompt: str) -> str:
     client = ollama.AsyncClient()
@@ -39,10 +39,13 @@ async def generate_chat_reponse_with_google(prompt: str) -> str:
         )
     )
 
-    response = await client.aio.models.generate_content(
-        model=model,
-        contents=contents,
-        config=generate_content_config,
-    )
+    try:
+        response = await client.aio.models.generate_content(
+            model=model,
+            contents=contents,
+            config=generate_content_config,
+        )
+    except Exception as e:
+        return "Tom Riddle is busy"
 
     return response.text
