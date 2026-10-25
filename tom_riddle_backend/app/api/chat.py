@@ -6,5 +6,5 @@ router = APIRouter()
 
 @router.post("/", response_model=ChatResponse)
 async def chat_with_model(request: ChatRequest):
-    reply_text = await generate_chat_reponse_with_google(request.prompt)
+    reply_text = await generate_chat_reponse_with_google(request.prompt, request.history)
     return ChatResponse(reply=reply_text)

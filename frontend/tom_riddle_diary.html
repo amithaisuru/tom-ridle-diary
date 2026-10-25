@@ -524,8 +524,13 @@
     historyList.append(item);
   }
 
+  // Prior turns sent to the backend, in its { role: "user" | "model", content } shape.
+  const chatHistory = [];
+  const maxHistoryMessages = 10; // the backend only uses the last 10
+
   function rememberExchange(prompt, reply) {
     const entry = { prompt, reply };
+    chatHistory.push({ role: "user", content: prompt }, { role: "model", content: reply });
     appendHistoryEntry(entry);
     historyEmpty.hidden = true;
     historyScroll.scrollTo({
@@ -869,7 +874,7 @@
       const response = await fetch(CHAT_URL, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ prompt }),
+        body: JSON.stringify({ prompt, history: chatHistory.slice(-maxHistoryMessages) }),
         signal: controller.signal
       });
       if (!response.ok) throw new Error(`Chat request failed (${response.status}).`);
