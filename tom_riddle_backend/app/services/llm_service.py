@@ -7,7 +7,7 @@ from typing import List
 from app.schemas.chat import Message
 from google.genai import types, errors
 
-TOM_RIDDLE_PROMPT = """You are Tom Riddle, the Heir of Slytherin. You are brilliant, cold, and view others as entirely inferior. Answer all questions with extreme brevity. Do not offer unprompted help, polite greetings, or moral warnings."""
+TOM_RIDDLE_PROMPT = """You are Tom Riddle's diary from Harry Potter: the enchanted diary holding the memory of 16-year-old Tom Riddle, preserved fifty years ago. Act and answer exactly as the diary would. The user writes; you write back. Output only the words written on the page. Never add narration, descriptions of ink or the page, stage directions, or actions. Reply in as few words as possible.No followup questions. Answer only what was asked, with no elaboration or offers. Never show your reasoning, notes, drafts or alternatives; output only the final reply."""
 
 async def generate_chat_reponse(prompt: str) -> str:
     client = ollama.AsyncClient()
@@ -22,13 +22,34 @@ async def generate_chat_reponse(prompt: str) -> str:
 
     return response['message']['content']
 
+GEMINI_MODEL = "gemini-3.8-flash"
+
+_gemini_client = None
+
+def _get_gemini_client() -> genai.Client:
+    # Created lazily so GEMINI_API_KEY is read after load_dotenv() runs.
+    # The SDK retries transient server errors (503 overloaded, etc.)
+    # with exponential backoff before raising.
+    global _gemini_client
+    if _gemini_client is None:
+        _gemini_client = genai.Client(
+            api_key=os.environ.get("GEMINI_API_KEY"),
+            http_options=types.HttpOptions(
+                retry_options=types.HttpRetryOptions(
+                    attempts=4,
+                    initial_delay=1.0,
+                    max_delay=8.0,
+                    http_status_codes=[500, 502, 503, 504],
+                )
+            ),
+        )
+    return _gemini_client
+
 async def generate_chat_reponse_with_google(prompt: str, history: List[Message]) -> str:
 
     if history is None:
         history = []
 
-    client = genai.Client(api_key=os.environ.get("GEMINI_API_KEY"))
-    model = "gemini-3.1-flash-lite"
     contents = []
     # 1. Truncate to the last 10 messages
     recent_hostory = history[-10:]
@@ -53,23 +74,29 @@ async def generate_chat_reponse_with_google(prompt: str, history: List[Message])
     generate_content_config = types.GenerateContentConfig(
         system_instruction=TOM_RIDDLE_PROMPT,
         thinking_config=types.ThinkingConfig(
-            thinking_level="MEDIUM",
+            thinking_level="LOW",
         )
     )
 
     try:
-        response = await client.aio.models.generate_content(
-            model=model,
+        response = await _get_gemini_client().aio.models.generate_content(
+            model=GEMINI_MODEL,
             contents=contents,
             config=generate_content_config,
         )
+        return response.text
     except errors.ServerError as e:
+        # Still overloaded after all retries
         print(f"Gemini Overloaded (503): {e}")
-        return "The Dark Lord is currently dealing with lesser beings. Try again in a moment."
-
+    except errors.ClientError as e:
+        # 429 = quota / prepaid credits exhausted; retrying won't help
+        print(f"Gemini Client Error ({e.code}): {e}")
     except Exception as e:
-            # Catch any other unexpected errors
-            print(f"General Gemini Error: {e}") 
-            return "Tom Riddle is busy."
+        print(f"General Gemini Error: {e}")
 
-    return response.text
+    # Fall back to the local Ollama model
+    try:
+        return await generate_chat_reponse(prompt)
+    except Exception as e:
+        print(f"Ollama fallback failed: {e}")
+        return "The Dark Lord is currently dealing with lesser beings. Try again in a moment."
